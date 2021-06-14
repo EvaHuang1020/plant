@@ -12,14 +12,19 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -33,14 +38,22 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
+
 public class PlantRecord extends AppCompatActivity {
 
-    List<recorddatelist> record = new ArrayList<>();
+    List<RecordModel> record = new ArrayList<>();
     private RecyclerView plantrecyclerView;
 
     final OkHttpClient client = new OkHttpClient();
     public ExecutorService service = Executors.newSingleThreadExecutor();
-    Gson gson = new Gson();
+    //    Gson gson = new Gson();
+    Gson gson = new GsonBuilder().setDateFormat("EEEE, dd MM yyyy HH:mm:ss").create();
     public MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private SectionedRecyclerViewAdapter sectionedAdapter;
 
@@ -58,36 +71,57 @@ public class PlantRecord extends AppCompatActivity {
             @Override
             public void run() {
 
-                Request request = new Request.Builder().url("http://192.168.10.114:9402/Login/getrecord").get().build();
+                Request request = new Request.Builder().url("http://192.168.10.114/Login/getrecord").get().build();
                 try {
                     final Response response = client.newCall(request).execute();
                     final String resStr = response.body().string();
-                    Log.e("", resStr);
+                    Log.e("resStr", resStr);
                     JSONObject jsonObject = new JSONObject(resStr);
-                    String array = jsonObject.getString("JsonResult");
+                    String array = jsonObject.getString("jsonResult");
                     record.clear();
-                    record.addAll(gson.fromJson(array, new TypeToken<List<recorddatelist>>() {
+                    record.addAll(gson.fromJson(array, new TypeToken<List<RecordModel>>() {
                     }.getType()));
                     Log.e("結果", record.size() + "");
 
                     runOnUiThread(new Runnable() {
                         @Override
-
-
                         public void run() {
+                            SimpleDateFormat formatter = new SimpleDateFormat("yyyy/MM/dd EEEE");
+                            SimpleDateFormat formattertime = new SimpleDateFormat("HH");
+                            Map<Date, List<RecordModel>> map = record.stream().collect(Collectors.groupingBy(x -> {
+                                try {
+                                    return formatter.parse(formatter.format(x.date));
+                                } catch (ParseException e) {
+                                    e.printStackTrace();
+                                    return new Date();
+                                }
+                            }));
 
 
-                            record.stream().map(x->x.date).distinct().forEach(x->{
-
-                                List<recorddatelist> list = record.stream().filter(y->y.date.equals(x)).collect(Collectors.toList());
-
-                                ExpandableContactsSection section = new ExpandableContactsSection (x,list);
-
-                                sectionedAdapter.addSection(section);
+                            List<double[]> all = new ArrayList<>();
+                            all.add(new double[]{4, 5, 6});
+                            all.add(new double[]{5, 8, 2});
+                            all.add(new double[]{6, 1, 7});
 
 
-                            });
+
+
+
+                            double[] sum = all.stream().reduce(new double[]{0,0,0}, (a, b) -> new double[]{a[0] + b[0], a[1] + b[1], a[2] + b[2]});
+
+
+                            double[] avg =IntStream.range(0,sum.length).mapToDouble(index ->sum[index]/all.size()).toArray();
+
+
+                            Log.e("c的總和", avg[0] + "," + avg[1] + "," + avg[2]);
+
+
+                            map.keySet().forEach(x -> sectionedAdapter.addSection(new ExpandableContactsSection(formatter.format(x), map.get(x))));
+
+                            map.keySet().forEach(x -> Log.e("", formatter.format(x) + " 有 " + map.get(x).size() + "筆紀錄"));
                             plantrecyclerView.setAdapter(sectionedAdapter);
+
+
                         }
                     });
 
@@ -105,12 +139,12 @@ public class PlantRecord extends AppCompatActivity {
     class ExpandableContactsSection extends Section {
 
         private final String title;
-        private final List<recorddatelist> SectionList;
+        private final List<RecordModel> SectionList;
 
 
         private boolean expanded = false;
 
-        ExpandableContactsSection(@NonNull String title, @NonNull List<recorddatelist> list
+        ExpandableContactsSection(@NonNull String title, @NonNull List<RecordModel> list
         ) {
             super(SectionParameters.builder()
                     .itemResourceId(R.layout.plant_record_cardview)
@@ -171,22 +205,17 @@ public class PlantRecord extends AppCompatActivity {
         @Override
         public void onBindItemViewHolder(final RecyclerView.ViewHolder holder, final int position) {
             final ItemViewHolder itemHolder = (ItemViewHolder) holder;
-
-            final recorddatelist fireItem = SectionList.get(position);
-
-            itemHolder.item_time.setText(fireItem.time);
-            itemHolder.item_sw.setText(fireItem.sw);
-            itemHolder.item_at.setText(fireItem.at);
-            itemHolder.item_aw.setText(fireItem.aw);
-
-
-
+            final RecordModel fireItem = SectionList.get(position);
+//            SimpleDateFormat formattertime = new SimpleDateFormat("HH:mm");
+            itemHolder.item_time.setText(fireItem.date + "");
+            itemHolder.item_sw.setText(fireItem.sw + "");
+            itemHolder.item_at.setText(fireItem.at + "");
+            itemHolder.item_aw.setText(fireItem.aw + "");
 
 
             itemHolder.rootView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-
 
 
                 }
@@ -196,8 +225,6 @@ public class PlantRecord extends AppCompatActivity {
             itemHolder.rootView.setOnLongClickListener(new View.OnLongClickListener() {
                 @Override
                 public boolean onLongClick(final View view) {
-
-
 
 
                     return true;
@@ -218,12 +245,10 @@ public class PlantRecord extends AppCompatActivity {
 
             int index = sectionedAdapter.getSectionIndex(this) + 1;
 
-            headerHolder.tvTitle.setText(title +" 有"+SectionList.size()+"筆");
+            headerHolder.tvTitle.setText(title + " 有" + SectionList.size() + "筆");
             headerHolder.imgArrow.setImageResource(
                     expanded ? R.drawable.ic_keyboard_arrow_up_black_18dp : R.drawable.ic_keyboard_arrow_down_black_18dp
             );
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -267,13 +292,19 @@ public class PlantRecord extends AppCompatActivity {
     }
 
 
-    public class recorddatelist {
+    public class RecordModel {
 
-        public String date;
-        public String time;
-        public String sw;
-        public String at;
-        public String aw;
+        public Date date;
+
+        public double sw;
+        public double at;
+        public double aw;
+
+        public double[] valuearray() {
+
+            return new double[]{sw, at, aw};
+        }
     }
+
 
 }

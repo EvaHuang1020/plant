@@ -72,7 +72,7 @@ public class Login extends AppCompatActivity {
 
                         RequestBody body = RequestBody.create(JSON, jsonObject.toString());
 
-                        Request request = new Request.Builder().url("http://192.168.10.114:9402/Login/login").post(body).build();
+                        Request request = new Request.Builder().url("http://192.168.10.114/Login/login").post(body).build();
                         try {
                             final Response response = client.newCall(request).execute();
                             final String resStr = response.body().string();
