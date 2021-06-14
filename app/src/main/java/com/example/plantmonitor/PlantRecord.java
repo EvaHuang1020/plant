@@ -20,6 +20,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.text.DateFormat;
+import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -75,50 +76,85 @@ public class PlantRecord extends AppCompatActivity {
                 try {
                     final Response response = client.newCall(request).execute();
                     final String resStr = response.body().string();
-                    Log.e("resStr", resStr);
+//                    Log.e("resStr", resStr);
                     JSONObject jsonObject = new JSONObject(resStr);
                     String array = jsonObject.getString("jsonResult");
                     record.clear();
                     record.addAll(gson.fromJson(array, new TypeToken<List<RecordModel>>() {
                     }.getType()));
-                    Log.e("結果", record.size() + "");
+
 
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             SimpleDateFormat formatter = new SimpleDateFormat("yyyy/MM/dd EEEE");
                             SimpleDateFormat formattertime = new SimpleDateFormat("HH");
-                            Map<Date, List<RecordModel>> map = record.stream().collect(Collectors.groupingBy(x -> {
+                            Map<Date, List<RecordModel>> map = record.stream().sorted((a,b)->a.date.compareTo(b.date)).collect(Collectors.groupingBy(x -> {
                                 try {
                                     return formatter.parse(formatter.format(x.date));
                                 } catch (ParseException e) {
                                     e.printStackTrace();
                                     return new Date();
                                 }
-                            }));
-
-
-                            List<double[]> all = new ArrayList<>();
-                            all.add(new double[]{4, 5, 6});
-                            all.add(new double[]{5, 8, 2});
-                            all.add(new double[]{6, 1, 7});
+                            }));//以日期切割
 
 
 
+                            map.keySet().forEach(date -> {
+                                SimpleDateFormat formatter1 = new SimpleDateFormat("HH");
+                                Map<Date, List<RecordModel>> everyhourmap = map.get(date).stream().collect(Collectors.groupingBy(x -> {
+                                    try {
+                                        return formatter1.parse(formatter1.format(x.date));
+                                    } catch (ParseException e) {
+                                        e.printStackTrace();
+                                        return new Date();
+                                    }
+                                }));
+
+                                List<RecordModel>avglist = new ArrayList<>();
+                                everyhourmap.keySet().forEach(hour -> {
+
+                                    List<RecordModel>onehour = everyhourmap.get(hour);
+
+                                    double[] sum = onehour.stream().map(x -> x.valuearray()).reduce(new double[]{0, 0, 0}, (a, b) -> new double[]{a[0] + b[0], a[1] + b[1], a[2] + b[2]});
+                                    double[] avg = IntStream.range(0, sum.length).mapToDouble(index -> sum[index] / onehour.size()).toArray();
+                                    RecordModel Avgmodel = new RecordModel(hour,avg);
+                                    avglist.add(Avgmodel);
+                                });
+                                map.put(date,avglist);
+                            });
 
 
-                            double[] sum = all.stream().reduce(new double[]{0,0,0}, (a, b) -> new double[]{a[0] + b[0], a[1] + b[1], a[2] + b[2]});
 
 
-                            double[] avg =IntStream.range(0,sum.length).mapToDouble(index ->sum[index]/all.size()).toArray();
 
 
-                            Log.e("c的總和", avg[0] + "," + avg[1] + "," + avg[2]);
+
+//                            samedateList.forEach(record ->
+//                                    Log.e("當下時間", formatter1.format(record.date))
+//                            );
+
+
+
+
+
+
+
+//                            List<double[]> all = new ArrayList<>();
+//                            all.add(new double[]{4, 5, 6});
+//                            all.add(new double[]{5, 8, 2});
+//                            all.add(new double[]{6, 1, 7});
+//
+//
+//                            double[] sum = all.stream().reduce(new double[]{0, 0, 0}, (a, b) -> new double[]{a[0] + b[0], a[1] + b[1], a[2] + b[2]});
+//
+//
+//                            double[] avg = IntStream.range(0, sum.length).mapToDouble(index -> sum[index] / all.size()).toArray();
 
 
                             map.keySet().forEach(x -> sectionedAdapter.addSection(new ExpandableContactsSection(formatter.format(x), map.get(x))));
 
-                            map.keySet().forEach(x -> Log.e("", formatter.format(x) + " 有 " + map.get(x).size() + "筆紀錄"));
+
                             plantrecyclerView.setAdapter(sectionedAdapter);
 
 
@@ -206,11 +242,14 @@ public class PlantRecord extends AppCompatActivity {
         public void onBindItemViewHolder(final RecyclerView.ViewHolder holder, final int position) {
             final ItemViewHolder itemHolder = (ItemViewHolder) holder;
             final RecordModel fireItem = SectionList.get(position);
-//            SimpleDateFormat formattertime = new SimpleDateFormat("HH:mm");
-            itemHolder.item_time.setText(fireItem.date + "");
-            itemHolder.item_sw.setText(fireItem.sw + "");
-            itemHolder.item_at.setText(fireItem.at + "");
-            itemHolder.item_aw.setText(fireItem.aw + "");
+            DecimalFormat frmt = new DecimalFormat();
+            frmt.setMaximumFractionDigits(3);
+
+            SimpleDateFormat formattertime = new SimpleDateFormat("HH");
+            itemHolder.item_time.setText(formattertime.format(fireItem.date)  );
+            itemHolder.item_sw.setText(frmt.format(fireItem.sw)  + "");
+            itemHolder.item_at.setText( frmt.format(fireItem.at) + "");
+            itemHolder.item_aw.setText(frmt.format(fireItem.aw) + "");
 
 
             itemHolder.rootView.setOnClickListener(new View.OnClickListener() {
@@ -299,6 +338,15 @@ public class PlantRecord extends AppCompatActivity {
         public double sw;
         public double at;
         public double aw;
+
+        public RecordModel(Date HourDate, double[] avgarray) {
+            date = HourDate;
+            sw = avgarray[0];
+            at = avgarray[1];
+            aw = avgarray[2];
+
+        }
+
 
         public double[] valuearray() {
 
